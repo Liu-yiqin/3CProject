@@ -17,6 +17,13 @@ public class PlayerCharacter : MonoBehaviour
     [Header("References")]
 
     /// <summary>
+    /// 角色朝向控制器。
+    /// 负责让角色朝移动方向旋转。
+    /// </summary>
+    [SerializeField]
+    private CharacterRotator characterRotator;
+
+    /// <summary>
     /// 输入读取器。
     /// 负责读取键盘、手柄、摇杆等输入。
     /// </summary>
@@ -43,13 +50,18 @@ public class PlayerCharacter : MonoBehaviour
         {
             characterMotor = GetComponent<CharacterMotor>();
         }
+
+        if (characterRotator == null)
+        {
+            characterRotator = GetComponent<CharacterRotator>();
+        }
     }
 
     private void Update()
     {
         // 安全检查。
         // 防止组件没挂导致空引用报错。
-        if (inputReader == null || characterMotor == null)
+        if (inputReader == null || characterMotor == null || characterRotator == null)
         {
             return;
         }
@@ -61,6 +73,9 @@ public class PlayerCharacter : MonoBehaviour
         PlayerCommand command = inputReader.CurrentCommand;
 
         // 把移动输入和跳跃输入交给角色移动系统。
-        characterMotor.Move(command.MoveInput, command.JumpPressed);
+        characterMotor.Move(command.MoveInput, command.JumpPressed, command.JumpHeld);
+
+        // 根据移动方向旋转角色。
+        characterRotator.RotateTowards(characterMotor.CurrentMoveDirection);
     }
 }

@@ -23,36 +23,25 @@ public class PlayerInputReader : MonoBehaviour
     /// <summary>
     /// 读取当前这一帧的所有玩家输入。
     /// 
-    /// 当前第 3 步包含：
+    /// 当前包含：
     /// 1. 移动输入
-    /// 2. 跳跃输入
-    /// 
-    /// 后续如果加入冲刺、攻击、镜头输入，
-    /// 也可以继续在这里扩展。
+    /// 2. 跳跃按下
+    /// 3. 跳跃按住
     /// </summary>
     public void ReadInput()
     {
         Vector2 moveInput = ReadMoveInput();
-        bool jumpPressed = ReadJumpInput();
 
         CurrentCommand = new PlayerCommand
         {
             MoveInput = moveInput,
-            JumpPressed = jumpPressed
+            JumpPressed = Input.GetKeyDown(KeyCode.Space),
+            JumpHeld = Input.GetKey(KeyCode.Space)
         };
     }
 
     /// <summary>
     /// 读取移动输入。
-    /// 
-    /// 当前使用 Unity 旧输入系统里的默认轴：
-    /// Horizontal:
-    ///     A / D
-    ///     LeftArrow / RightArrow
-    /// 
-    /// Vertical:
-    ///     W / S
-    ///     UpArrow / DownArrow
     /// </summary>
     /// <returns>当前这一帧的二维移动输入。</returns>
     private Vector2 ReadMoveInput()
@@ -61,8 +50,6 @@ public class PlayerInputReader : MonoBehaviour
         float vertical = Input.GetAxisRaw("Vertical");
 
         Vector2 moveInput = new Vector2(horizontal, vertical);
-
-        // 防止斜向移动速度变快。
         moveInput = Vector2.ClampMagnitude(moveInput, 1f);
 
         return moveInput;

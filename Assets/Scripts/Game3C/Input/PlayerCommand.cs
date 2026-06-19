@@ -29,17 +29,20 @@ public struct PlayerCommand
     public Vector2 MoveInput;
 
     /// <summary>
-    /// 当前这一帧是否按下了跳跃键。
+    /// 当前这一帧是否按下跳跃键。
     /// 
-    /// 注意：
-    /// Pressed 表示“按下这一瞬间”，
-    /// 不是“持续按住”。
-    /// 
-    /// 例如：
-    /// 按下 Space 的第一帧是 true，
-    /// 后面一直按住 Space 也会变回 false。
+    /// 只在按下 Space 的这一帧为 true。
+    /// 用于触发起跳。
     /// </summary>
     public bool JumpPressed;
+
+    /// <summary>
+    /// 当前是否按住跳跃键。
+    /// 
+    /// 按住 Space 期间，每一帧都是 true。
+    /// 用于控制长按跳得更高。
+    /// </summary>
+    public bool JumpHeld;
 
     /// <summary>
     /// 是否有移动输入。

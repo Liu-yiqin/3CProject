@@ -123,6 +123,31 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &407149176 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6365229698960581989, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}
+  m_PrefabInstance: {fileID: 6365229698936239520}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &407149182 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6365229698960581990, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}
+  m_PrefabInstance: {fileID: 6365229698936239520}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &407149183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 407149176}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9177a6df2026574fb9e50ae9af8087c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rotationRoot: {fileID: 407149182}
+  rotateSpeed: 720
+  minDirectionSqrMagnitude: 0.0001
 --- !u!1 &647342187
 GameObject:
   m_ObjectHideFlags: 0
@@ -600,6 +625,10 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 40240277087839459, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}
+      propertyPath: maxJumpHoldTime
+      value: 0.25
+      objectReference: {fileID: 0}
     - target: {fileID: 2777801350950927859, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}
       propertyPath: groundCheckRadius
       value: 0.2
@@ -672,5 +701,9 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7464913788977881449, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}
+      propertyPath: characterRotator
+      value: 
+      objectReference: {fileID: 407149183}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a67bcb8795cce343a459cae14cd0cde, type: 3}

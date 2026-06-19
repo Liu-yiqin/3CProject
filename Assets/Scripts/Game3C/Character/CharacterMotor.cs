@@ -20,6 +20,36 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterController))]
 public class CharacterMotor : MonoBehaviour
 {
+    /// <summary>
+    /// 当前这一帧的水平移动方向。
+    /// 
+    /// 这个方向是世界空间方向。
+    /// 
+    /// 例如：
+    /// W：Vector3.forward
+    /// S：Vector3.back
+    /// A：Vector3.left
+    /// D：Vector3.right
+    /// 
+    /// 如果当前没有移动输入，值为 Vector3.zero。
+    /// </summary>
+    private Vector3 currentMoveDirection;
+
+    /// <summary>
+    /// 当前这一帧的水平移动方向。
+    /// </summary>
+    public Vector3 CurrentMoveDirection => currentMoveDirection;
+
+    /// <summary>
+    /// 当前这一帧是否有有效移动方向。
+    /// 
+    /// 注意：
+    /// 这里判断的是移动方向，
+    /// 不是垂直速度。
+    /// 所以角色原地跳跃时，这里仍然是 false。
+    /// </summary>
+    public bool HasMoveDirection => currentMoveDirection.sqrMagnitude > 0.0001f;
+
     [Header("References")]
 
     /// <summary>
@@ -66,20 +96,83 @@ public class CharacterMotor : MonoBehaviour
     [SerializeField]
     private float groundedStickVelocity = -2f;
 
+    /// <summary>
+    /// 最大下落速度。
+    /// 
+    /// 防止角色下落速度无限变大。
+    /// 注意这个值应该是负数。
+    /// </summary>
+    [SerializeField]
+    private float maxFallSpeed = -30f;
+
     [Header("Jump Settings")]
 
     /// <summary>
-    /// 跳跃高度。
+    /// 起跳初速度对应的基础高度。
     /// 
-    /// 单位：米。
+    /// 这里不是最终最大跳跃高度，
+    /// 而是按下跳跃时，用它计算第一下起跳速度。
     /// 
-    /// 这里不是直接设置跳跃速度，
-    /// 而是通过 jumpHeight 和 gravity 计算出起跳速度。
-    /// 这样调参时更直观：
-    /// 你想让角色跳多高，就填多高。
+    /// 长按能跳得更高，
+    /// 是因为后续上升阶段重力更小。
     /// </summary>
     [SerializeField]
-    private float jumpHeight = 1.5f;
+    private float jumpStartHeight = 1.0f;
+
+    /// <summary>
+    /// 长按跳跃最多生效多久。
+    /// 
+    /// 玩家按住跳跃键时，
+    /// 只有在这个时间窗口内才会使用较小重力。
+    /// 
+    /// 时间到后，即使继续按住，
+    /// 也会恢复正常上升重力。
+    /// </summary>
+    [SerializeField]
+    private float maxJumpHoldTime = 0.25f;
+
+    /// <summary>
+    /// 长按跳跃时的上升重力倍率。
+    /// 
+    /// 数值越小，按住跳跃时上升速度衰减越慢，跳得越高。
+    /// 
+    /// 例如：
+    /// gravity = -20
+    /// jumpHoldGravityMultiplier = 0.45
+    /// 实际上升重力 = -9
+    /// </summary>
+    [SerializeField]
+    private float jumpHoldGravityMultiplier = 0.45f;
+
+    /// <summary>
+    /// 松开跳跃键后的上升重力倍率。
+    /// 
+    /// 数值越大，松手后向上速度衰减越快，短按跳得越低。
+    /// 
+    /// 注意：
+    /// 它不会直接修改 verticalVelocity，
+    /// 只是让后续速度更快变小。
+    /// </summary>
+    [SerializeField]
+    private float jumpReleaseGravityMultiplier = 2.5f;
+
+    /// <summary>
+    /// 下落阶段的重力倍率。
+    /// 
+    /// 数值越大，下落越快，角色越不飘。
+    /// </summary>
+    [SerializeField]
+    private float fallGravityMultiplier = 1.8f;
+
+    /// <summary>
+    /// 重力倍率变化速度。
+    /// 
+    /// 用于让重力倍率从一个值平滑过渡到另一个值。
+    /// 
+    /// 这样松开跳跃时，不会连加速度都突然变化得太硬。
+    /// </summary>
+    [SerializeField]
+    private float gravityMultiplierChangeSpeed = 25f;
 
     /// <summary>
     /// Unity 自带的 CharacterController。
@@ -100,6 +193,28 @@ public class CharacterMotor : MonoBehaviour
     /// 第 3 步加入跳跃后，它会出现正数。
     /// </summary>
     private float verticalVelocity;
+
+    /// <summary>
+    /// 当前跳跃长按剩余时间。
+    /// </summary>
+    private float jumpHoldTimer;
+
+    /// <summary>
+    /// 当前是否处于一次跳跃过程中。
+    /// 
+    /// 用于区分：
+    /// 1. 正常地面状态
+    /// 2. 起跳后的上升 / 下落状态
+    /// </summary>
+    private bool isJumping;
+
+    /// <summary>
+    /// 当前正在使用的重力倍率。
+    /// 
+    /// 这个值会向目标倍率平滑变化。
+    /// </summary>
+    private float currentGravityMultiplier = 1f;
+
 
     /// <summary>
     /// 当前是否在地面上。
@@ -137,26 +252,75 @@ public class CharacterMotor : MonoBehaviour
         {
             groundDetector = GetComponent<GroundDetector>();
         }
+
+        ValidateSettings();
+    }
+
+    /// <summary>
+    /// 校验移动和跳跃参数。
+    /// 
+    /// 这里不做静默兜底。
+    /// 参数错了就直接报错，方便定位配置问题。
+    /// </summary>
+    private void ValidateSettings()
+    {
+        if (gravity >= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 gravity 必须是负数。", this);
+        }
+
+        if (maxFallSpeed >= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 maxFallSpeed 必须是负数。", this);
+        }
+
+        if (jumpStartHeight <= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 jumpStartHeight 必须大于 0。", this);
+        }
+
+        if (maxJumpHoldTime < 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 maxJumpHoldTime 不能小于 0。", this);
+        }
+
+        if (jumpHoldGravityMultiplier <= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 jumpHoldGravityMultiplier 必须大于 0。", this);
+        }
+
+        if (jumpReleaseGravityMultiplier <= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 jumpReleaseGravityMultiplier 必须大于 0。", this);
+        }
+
+        if (fallGravityMultiplier <= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 fallGravityMultiplier 必须大于 0。", this);
+        }
+
+        if (gravityMultiplierChangeSpeed <= 0f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 gravityMultiplierChangeSpeed 必须大于 0。", this);
+        }
     }
 
     /// <summary>
     /// 执行角色移动。
     /// 
-    /// 当前这个方法每帧由 PlayerCharacter 调用。
-    /// 它内部会同时处理：
-    /// 1. 水平移动
-    /// 2. 地面检测
-    /// 3. 重力
-    /// 4. 最终位移
+    /// 当前每帧由 PlayerCharacter 调用。
     /// </summary>
-    /// <param name="moveInput">玩家输入的移动方向，来自 PlayerCommand。</param>
-    public void Move(Vector2 moveInput, bool jumpPressed)
+    /// <param name="moveInput">玩家移动输入。</param>
+    /// <param name="jumpPressed">当前这一帧是否按下跳跃。</param>
+    /// <param name="jumpHeld">当前是否按住跳跃。</param>
+    public void Move(Vector2 moveInput, bool jumpPressed, bool jumpHeld)
     {
         RefreshGroundedState();
-        ApplyGravity();
-        ApplyJump(jumpPressed);
+        TryStartJump(jumpPressed);
+        ApplyVerticalMotion(jumpHeld);
         MoveCharacter(moveInput);
     }
+
 
     /// <summary>
     /// 刷新角色是否在地面上的状态。
@@ -170,40 +334,12 @@ public class CharacterMotor : MonoBehaviour
     }
 
     /// <summary>
-    /// 应用重力。
+    /// 尝试开始跳跃。
     /// 
-    /// 如果角色在地面上，并且当前垂直速度小于 0，
-    /// 就把垂直速度设置成一个小的向下速度。
-    /// 
-    /// 如果角色不在地面上，
-    /// 就持续累加重力，让角色越来越快地下落。
-    /// </summary>
-    private void ApplyGravity()
-    {
-        if (IsGrounded && verticalVelocity < 0f)
-        {
-            verticalVelocity = groundedStickVelocity;
-        }
-        else
-        {
-            verticalVelocity += gravity * Time.deltaTime;
-        }
-    }
-
-    /// <summary>
-    /// 应用跳跃。
-    /// 
-    /// 只有满足以下条件才允许起跳：
-    /// 1. 当前这一帧按下了跳跃键
-    /// 2. 角色当前在地面上
-    /// 3. 当前不是正在向上运动
-    /// 
-    /// 起跳的本质：
-    /// 给 verticalVelocity 一个正数，
-    /// 让角色获得向上的初速度。
+    /// 只有在地面上，并且当前这一帧按下跳跃键时，才允许起跳。
     /// </summary>
     /// <param name="jumpPressed">当前这一帧是否按下跳跃。</param>
-    private void ApplyJump(bool jumpPressed)
+    private void TryStartJump(bool jumpPressed)
     {
         if (!jumpPressed)
         {
@@ -215,24 +351,90 @@ public class CharacterMotor : MonoBehaviour
             return;
         }
 
+        // 防止 GroundCheck 还没离开地面时，连续触发起跳。
         if (verticalVelocity > 0f)
         {
             return;
         }
 
-        if (gravity >= 0f)
+        if (gravity >= 0f || jumpStartHeight <= 0f)
         {
-            Debug.LogError($"{nameof(CharacterMotor)} 的 gravity 必须是负数，否则无法根据 jumpHeight 计算跳跃速度。", this);
+            Debug.LogError($"{nameof(CharacterMotor)} 跳跃参数错误，无法起跳。", this);
             return;
         }
 
-        if (jumpHeight <= 0f)
+        verticalVelocity = Mathf.Sqrt(jumpStartHeight * -2f * gravity);
+
+        isJumping = true;
+        jumpHoldTimer = maxJumpHoldTime;
+        currentGravityMultiplier = 1f;
+    }
+
+    /// <summary>
+    /// 应用垂直方向运动。
+    /// 
+    /// 这里负责：
+    /// 1. 落地时重置垂直速度
+    /// 2. 上升时根据是否长按跳跃选择重力倍率
+    /// 3. 下落时使用更大的下落重力
+    /// 4. 限制最大下落速度
+    /// </summary>
+    /// <param name="jumpHeld">当前是否按住跳跃。</param>
+    private void ApplyVerticalMotion(bool jumpHeld)
+    {
+        if (IsGrounded && verticalVelocity <= 0f)
         {
-            Debug.LogError($"{nameof(CharacterMotor)} 的 jumpHeight 必须大于 0。", this);
+            verticalVelocity = groundedStickVelocity;
+            isJumping = false;
+            jumpHoldTimer = 0f;
+            currentGravityMultiplier = 1f;
             return;
         }
 
-        verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        float targetGravityMultiplier = GetTargetGravityMultiplier(jumpHeld);
+
+        currentGravityMultiplier = Mathf.MoveTowards(
+            currentGravityMultiplier,
+            targetGravityMultiplier,
+            gravityMultiplierChangeSpeed * Time.deltaTime
+        );
+
+        verticalVelocity += gravity * currentGravityMultiplier * Time.deltaTime;
+
+        if (verticalVelocity < maxFallSpeed)
+        {
+            verticalVelocity = maxFallSpeed;
+        }
+    }
+
+    /// <summary>
+    /// 获取当前应该使用的目标重力倍率。
+    /// 
+    /// 规则：
+    /// 1. 还在上升，并且玩家按住跳跃，并且长按时间还没用完：使用较小重力
+    /// 2. 还在上升，但玩家没按住，或者长按时间用完：使用较大上升重力
+    /// 3. 正在下落：使用下落重力
+    /// </summary>
+    /// <param name="jumpHeld">当前是否按住跳跃。</param>
+    /// <returns>目标重力倍率。</returns>
+    private float GetTargetGravityMultiplier(bool jumpHeld)
+    {
+        bool isRising = verticalVelocity > 0f;
+
+        if (isRising)
+        {
+            bool canUseHoldGravity = isJumping && jumpHeld && jumpHoldTimer > 0f;
+
+            if (canUseHoldGravity)
+            {
+                jumpHoldTimer -= Time.deltaTime;
+                return jumpHoldGravityMultiplier;
+            }
+
+            return jumpReleaseGravityMultiplier;
+        }
+
+        return fallGravityMultiplier;
     }
 
     /// <summary>
@@ -240,11 +442,19 @@ public class CharacterMotor : MonoBehaviour
     /// 
     /// 这里会把水平移动和垂直移动合并，
     /// 然后统一交给 CharacterController.Move。
+    /// 
+    /// 同时，这里会记录当前水平移动方向，
+    /// 供 CharacterRotator 进行角色朝向旋转。
     /// </summary>
     /// <param name="moveInput">玩家输入的移动方向。</param>
     private void MoveCharacter(Vector2 moveInput)
     {
         Vector3 horizontalDirection = GetWorldMoveDirection(moveInput);
+
+        // 保存当前这一帧的移动方向。
+        // 有输入时是世界方向；
+        // 没输入时是 Vector3.zero。
+        currentMoveDirection = horizontalDirection;
 
         Vector3 horizontalMotion = horizontalDirection * moveSpeed;
         Vector3 verticalMotion = Vector3.up * verticalVelocity;
