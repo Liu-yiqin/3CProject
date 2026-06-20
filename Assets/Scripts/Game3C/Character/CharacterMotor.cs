@@ -20,6 +20,23 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterController))]
 public class CharacterMotor : MonoBehaviour
 {
+    [Header("Camera Relative Move Settings")]
+
+    /// <summary>
+    /// 移动方向参考物。
+    /// 
+    /// 当前第 5 步用相机 Transform。
+    /// 
+    /// 作用：
+    /// 把玩家输入的二维方向转换成基于相机的世界移动方向。
+    /// 
+    /// 例如：
+    /// W 不再表示世界 Z+，
+    /// 而是表示相机当前水平前方。
+    /// </summary>
+    [SerializeField]
+    private Transform moveReference;
+
     /// <summary>
     /// 当前这一帧的水平移动方向。
     /// 
@@ -449,7 +466,7 @@ public class CharacterMotor : MonoBehaviour
     /// <param name="moveInput">玩家输入的移动方向。</param>
     private void MoveCharacter(Vector2 moveInput)
     {
-        Vector3 horizontalDirection = GetWorldMoveDirection(moveInput);
+        Vector3 horizontalDirection = GetCameraRelativeMoveDirection(moveInput);
 
         // 保存当前这一帧的移动方向。
         // 有输入时是世界方向；
@@ -465,21 +482,59 @@ public class CharacterMotor : MonoBehaviour
     }
 
     /// <summary>
-    /// 把二维输入转换成三维世界方向。
+    /// 把二维移动输入转换成基于相机方向的世界移动方向。
     /// 
-    /// 当前第 2 步仍然使用世界坐标移动：
-    /// W：世界 Z 正方向
-    /// S：世界 Z 负方向
-    /// A：世界 X 负方向
-    /// D：世界 X 正方向
+    /// 当前规则：
+    /// W / 上：沿相机水平前方移动
+    /// S / 下：沿相机水平后方移动
+    /// A / 左：沿相机水平左方移动
+    /// D / 右：沿相机水平右方移动
     /// 
-    /// 后面第 5 步会改成基于相机方向移动。
+    /// 注意：
+    /// 相机可能是俯视角色的，
+    /// 所以不能直接使用 moveReference.forward，
+    /// 必须把 y 分量去掉，只保留水平面方向。
     /// </summary>
     /// <param name="moveInput">二维移动输入。</param>
-    /// <returns>三维世界移动方向。</returns>
-    private Vector3 GetWorldMoveDirection(Vector2 moveInput)
+    /// <returns>基于相机方向得到的世界移动方向。</returns>
+    private Vector3 GetCameraRelativeMoveDirection(Vector2 moveInput)
     {
-        Vector3 moveDirection = new Vector3(moveInput.x, 0f, moveInput.y);
+        if (moveInput.sqrMagnitude <= 0.0001f)
+        {
+            return Vector3.zero;
+        }
+
+        if (moveReference == null)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 缺少 moveReference，无法计算基于相机的移动方向。", this);
+            return Vector3.zero;
+        }
+
+        Vector3 cameraForward = moveReference.forward;
+        Vector3 cameraRight = moveReference.right;
+
+        // 去掉相机方向中的上下分量。
+        // 角色移动只应该发生在水平面上。
+        cameraForward.y = 0f;
+        cameraRight.y = 0f;
+
+        if (cameraForward.sqrMagnitude <= 0.0001f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 moveReference.forward 在水平面上的长度过小，无法作为移动前方。", this);
+            return Vector3.zero;
+        }
+
+        if (cameraRight.sqrMagnitude <= 0.0001f)
+        {
+            Debug.LogError($"{nameof(CharacterMotor)} 的 moveReference.right 在水平面上的长度过小，无法作为移动右方。", this);
+            return Vector3.zero;
+        }
+
+        cameraForward.Normalize();
+        cameraRight.Normalize();
+
+        // moveInput.x转换成基于相机的水平方向移动，moveInput.y转换成基于相机的前后方向移动
+        Vector3 moveDirection = cameraRight * moveInput.x + cameraForward * moveInput.y;
 
         if (moveDirection.sqrMagnitude > 1f)
         {
