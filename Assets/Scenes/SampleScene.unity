@@ -348,6 +348,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 729605928}
+  - component: {fileID: 729605929}
   m_Layer: 0
   m_Name: CameraPitchPivot
   m_TagString: Untagged
@@ -371,6 +372,27 @@ Transform:
   m_Father: {fileID: 1725409344}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 15, y: 0, z: 0}
+--- !u!114 &729605929
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 729605927}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b18f54e364f6f1468e1c262029aa0d3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cameraTransform: {fileID: 963194228}
+  obstructionLayerMask:
+    serializedVersion: 2
+    m_Bits: 320
+  cameraRadius: 0.25
+  wallPadding: 0.08
+  minDistance: 0.8
+  moveInSpeed: 30
+  moveOutSpeed: 8
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -599,7 +621,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 407149182}
-  targetOffset: {x: 0, y: 1.2, z: 0}
+  targetOffset: {x: 0, y: 0, z: 0}
   smoothTime: 0.12
   maxFollowSpeed: 100
   snapOnStart: 1
