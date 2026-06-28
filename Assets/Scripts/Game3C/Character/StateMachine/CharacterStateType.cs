@@ -1,0 +1,10 @@
+/// <summary>
+/// ½ÇÉ«×´Ì¬ÀàÐÍ¡£
+/// </summary>
+public enum CharacterStateType
+{
+    Idle,
+    Move,
+    Jump,
+    Fall
+}

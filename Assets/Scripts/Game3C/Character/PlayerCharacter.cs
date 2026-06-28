@@ -3,79 +3,127 @@ using UnityEngine;
 /// <summary>
 /// 玩家角色总入口。
 /// 
-/// 当前它负责把输入层和角色移动层连接起来。
-/// 
-/// 当前它做的事情是：
-/// 1. 从 PlayerInputReader 获取玩家输入命令
-/// 2. 把移动输入交给 CharacterMotor
-/// 
-/// 后面这里会继续扩展：
-/// 状态机、动画控制、跳跃、冲刺、攻击等。
+/// 当前第 9 步中，它负责：
+/// 1. 读取输入
+/// 2. 驱动角色移动
+/// 3. 驱动角色旋转
+/// 4. 更新角色状态机
 /// </summary>
 public class PlayerCharacter : MonoBehaviour
 {
-    [Header("References")]
+    [Header("Control")]
 
-    /// <summary>
-    /// 角色朝向控制器。
-    /// 负责让角色朝移动方向旋转。
-    /// </summary>
-    [SerializeField]
-    private CharacterRotator characterRotator;
-
-    /// <summary>
-    /// 输入读取器。
-    /// 负责读取键盘、手柄、摇杆等输入。
-    /// </summary>
     [SerializeField]
     private PlayerInputReader inputReader;
 
-    /// <summary>
-    /// 角色移动执行器。
-    /// 负责真正移动角色。
-    /// </summary>
+    [Header("Character")]
+
     [SerializeField]
     private CharacterMotor characterMotor;
 
+    [SerializeField]
+    private CharacterRotator characterRotator;
+
+    private CharacterStateMachine stateMachine;
+
+    public PlayerCommand CurrentCommand { get; private set; }
+
+    public CharacterMotor CharacterMotor => characterMotor;
+
+    public CharacterStateType CurrentStateType => stateMachine.CurrentStateType;
+
     private void Awake()
     {
-        // 如果 Inspector 里没有手动拖引用，
-        // 就尝试从当前 Player 物体上自动获取。
-        if (inputReader == null)
-        {
-            inputReader = GetComponent<PlayerInputReader>();
-        }
+        ValidateReferences();
+        InitializeStateMachine();
+    }
 
-        if (characterMotor == null)
-        {
-            characterMotor = GetComponent<CharacterMotor>();
-        }
-
-        if (characterRotator == null)
-        {
-            characterRotator = GetComponent<CharacterRotator>();
-        }
+    private void Start()
+    {
+        stateMachine.ChangeState(CharacterStateType.Idle);
     }
 
     private void Update()
     {
-        // 安全检查。
-        // 防止组件没挂导致空引用报错。
-        if (inputReader == null || characterMotor == null || characterRotator == null)
-        {
-            return;
-        }
-
-        // 先读取当前这一帧输入。
         inputReader.ReadInput();
 
-        // 再拿到当前这一帧的输入命令。
-        PlayerCommand command = inputReader.CurrentCommand;
+        CurrentCommand = inputReader.CurrentCommand;
 
-        // 把移动输入和跳跃输入交给角色移动系统。
-        characterMotor.Move(command.MoveInput, command.JumpPressed, command.JumpHeld);
+        characterMotor.Move(
+            CurrentCommand.MoveInput,
+            CurrentCommand.JumpPressed,
+            CurrentCommand.JumpHeld
+        );
 
-        // 根据移动方向旋转角色。
         characterRotator.RotateTowards(characterMotor.CurrentMoveDirection);
+
+        stateMachine.Tick();
+    }
+
+    /// <summary>
+    /// 初始化状态机。
+    /// </summary>
+    private void InitializeStateMachine()
+    {
+        stateMachine = new CharacterStateMachine();
+
+        stateMachine.RegisterState(
+            CharacterStateType.Idle,
+            new CharacterIdleState(this, stateMachine)
+        );
+
+        stateMachine.RegisterState(
+            CharacterStateType.Move,
+            new CharacterMoveState(this, stateMachine)
+        );
+
+        stateMachine.RegisterState(
+            CharacterStateType.Jump,
+            new CharacterJumpState(this, stateMachine)
+        );
+
+        stateMachine.RegisterState(
+            CharacterStateType.Fall,
+            new CharacterFallState(this, stateMachine)
+        );
+    }
+
+    /// <summary>
+    /// 校验引用。
+    /// </summary>
+    private void ValidateReferences()
+    {
+        bool hasError = false;
+
+        if (inputReader == null)
+        {
+            Debug.LogError($"{nameof(PlayerCharacter)} 缺少 PlayerInputReader 引用。", this);
+            hasError = true;
+        }
+
+        if (characterMotor == null)
+        {
+            Debug.LogError($"{nameof(PlayerCharacter)} 缺少 CharacterMotor 引用。", this);
+            hasError = true;
+        }
+
+        if (characterRotator == null)
+        {
+            Debug.LogError($"{nameof(PlayerCharacter)} 缺少 CharacterRotator 引用。", this);
+            hasError = true;
+        }
+
+        if (hasError)
+        {
+            enabled = false;
+        }
+    }
+
+    private void OnGUI()
+    {
+        GUI.Label(
+            new Rect(20, 20, 300, 30),
+            $"State: {CurrentStateType}"
+        );
     }
 }
